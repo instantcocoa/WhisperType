@@ -1,0 +1,9 @@
+# CMake / Xcode build output
+/build/
+DerivedData/
+
+# Downloaded artifacts (fetched/generated at configure time)
+/models/
+
+# macOS
+.DS_Store

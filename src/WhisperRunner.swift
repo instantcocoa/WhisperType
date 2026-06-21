@@ -2,83 +2,99 @@
 //  WhisperRunner.swift
 //  WhisperType
 //
-//  Runs the bundled whisper.cpp CLI against a recorded WAV file, captures the
-//  transcription from standard output, and pastes it into the frontmost app
-//  via the pasteboard + a synthetic Cmd+V keystroke.
+//  In-process speech-to-text via WhisperKit (CoreML / Apple Neural Engine).
+//  The model is loaded lazily — downloaded from Hugging Face on first use and
+//  cached on disk by WhisperKit — so there is no bundled model and no
+//  whisper.cpp subprocess. Recognized text is pasted into the frontmost app via
+//  the pasteboard + a synthetic Cmd+V keystroke.
 //
 
 import Foundation
 import AppKit
 import CoreGraphics
+import WhisperKit
 
-final class WhisperRunner {
+/// Owns the WhisperKit instance and serializes access to it. Loading (and the
+/// first-run download) happens lazily and is cached for the process lifetime.
+actor WhisperEngine {
 
-    /// The bundled CLI binary (whisper.cpp's `whisper-cli`, copied in as `whisper-cpp`).
-    private var binaryURL: URL? {
-        Bundle.main.url(forResource: "whisper-cpp", withExtension: nil)
+    /// WhisperKit model name. WhisperKit fuzzy-matches this against the
+    /// `whisperkit-coreml` repo. Used only when no model is bundled.
+    private let modelName: String
+
+    /// The on-disk variant folder name WhisperKit uses, e.g.
+    /// `models/openai_whisper-base.en` inside the app's Resources.
+    private let bundledVariant: String
+
+    private var whisperKit: WhisperKit?
+
+    init(modelName: String = "base.en", bundledVariant: String = "openai_whisper-base.en") {
+        self.modelName = modelName
+        self.bundledVariant = bundledVariant
     }
 
-    /// The bundled model weights.
-    private var modelURL: URL? {
-        Bundle.main.url(forResource: "ggml-base.en", withExtension: "bin")
+    /// Loads the model if it isn't loaded yet. Prefers the model bundled into the
+    /// app (fully offline); if none is bundled, falls back to downloading from
+    /// Hugging Face on first use (network required once, then cached on disk).
+    /// Safe to call repeatedly.
+    func prepare() async throws {
+        guard whisperKit == nil else { return }
+
+        let config: WhisperKitConfig
+        if let bundle = bundledFolders() {
+            // Load the shipped model + tokenizer directly; never touch the network.
+            config = WhisperKitConfig(
+                model: modelName,
+                modelFolder: bundle.model.path,
+                tokenizerFolder: bundle.tokenizer,
+                download: false
+            )
+        } else {
+            // No bundled model — download the variant on demand and cache it.
+            config = WhisperKitConfig(model: modelName)
+        }
+        whisperKit = try await WhisperKit(config)
     }
 
-    // MARK: - Transcription
+    /// Locates the model + tokenizer folders bundled in the app, if present.
+    /// WhisperKit fetches the tokenizer from the original OpenAI repo separately,
+    /// so it is shipped (and pointed at via `tokenizerFolder`) in its own folder.
+    private func bundledFolders() -> (model: URL, tokenizer: URL)? {
+        guard let resources = Bundle.main.resourceURL else { return nil }
+        let models = resources.appendingPathComponent("models", isDirectory: true)
+        let model = models.appendingPathComponent(bundledVariant, isDirectory: true)
+        let tokenizer = models.appendingPathComponent("\(bundledVariant)-tokenizer", isDirectory: true)
 
-    /// Synchronously transcribes `wavURL`. Returns the recognized text, or nil
-    /// on failure. Must be called off the main thread (it blocks on the process).
-    func transcribe(wavURL: URL) -> String? {
-        guard let binaryURL else {
-            NSLog("WhisperType: bundled whisper-cpp binary not found.")
-            return nil
-        }
-        guard let modelURL else {
-            NSLog("WhisperType: bundled model (ggml-base.en.bin) not found.")
-            return nil
-        }
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: model.appendingPathComponent("config.json").path),
+              fm.fileExists(atPath: tokenizer.appendingPathComponent("tokenizer.json").path)
+        else { return nil }
 
-        let process = Process()
-        process.executableURL = binaryURL
-        process.arguments = [
-            "-m",  modelURL.path,   // model path
-            "-f",  wavURL.path,     // input WAV
-            "-l",  "en",            // language
-            "-nt",                  // no timestamps in output
-            "-np",                  // no progress / system prints
-        ]
+        return (model, tokenizer)
+    }
 
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError  = stderrPipe
+    /// Transcribes the audio file at `audioPath`. Returns cleaned text (possibly
+    /// empty for silence). Lazily prepares the model if needed.
+    func transcribe(audioPath: String) async throws -> String {
+        try await prepare()
+        guard let whisperKit else { return "" }
 
-        do {
-            try process.run()
-        } catch {
-            NSLog("WhisperType: failed to launch whisper-cpp — \(error.localizedDescription)")
-            return nil
-        }
-
-        // Drain stdout before waiting to avoid deadlocking on a full pipe buffer.
-        let outputData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        let errorData  = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else {
-            let err = String(data: errorData, encoding: .utf8) ?? "<unreadable>"
-            NSLog("WhisperType: whisper-cpp exited with status \(process.terminationStatus): \(err)")
-            return nil
-        }
-
-        guard let raw = String(data: outputData, encoding: .utf8) else { return nil }
-        return clean(raw)
+        let results = try await whisperKit.transcribe(audioPath: audioPath)
+        let raw = results.map(\.text).joined(separator: " ")
+        return WhisperEngine.clean(raw)
     }
 
     /// Strips whisper's bracketed non-speech annotations (e.g. "[BLANK_AUDIO]",
-    /// "[Music]") and collapses surrounding whitespace, so a silent or empty
-    /// recording yields an empty string rather than a stray marker.
-    private func clean(_ text: String) -> String {
-        let withoutMarkers = text.replacingOccurrences(
+    /// "[Music]"), the special `<|...|>` decoder tokens WhisperKit can emit, and
+    /// collapses surrounding whitespace — so a silent recording yields an empty
+    /// string rather than a stray marker.
+    static func clean(_ text: String) -> String {
+        let withoutTokens = text.replacingOccurrences(
+            of: #"<\|[^|]*\|>"#,
+            with: "",
+            options: .regularExpression
+        )
+        let withoutMarkers = withoutTokens.replacingOccurrences(
             of: #"\[[^\]]*\]"#,
             with: "",
             options: .regularExpression
@@ -89,13 +105,17 @@ final class WhisperRunner {
             .filter { !$0.isEmpty }
             .joined(separator: " ")
     }
+}
 
-    // MARK: - Pasting
+// MARK: - Pasting
+
+/// Pastes text into whatever text field currently has focus.
+enum Paster {
 
     /// Places `text` on the general pasteboard and simulates a Cmd+V keystroke
-    /// so it lands in whatever text field currently has focus.
-    /// Must be called on the main thread.
-    func paste(text: String) {
+    /// so it lands in the focused field. Must be called on the main thread.
+    @MainActor
+    static func paste(text: String) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)

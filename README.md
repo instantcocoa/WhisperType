@@ -1,10 +1,12 @@
 # WhisperType
 
-A lightweight, fully self-contained native macOS menu bar app for local
-dictation. By default, **hold the 🌐 Globe / Fn key** to record; release it to
-transcribe with an embedded [whisper.cpp](https://github.com/ggml-org/whisper.cpp)
-binary + model, and the recognized text is pasted straight into whatever text
-field currently has focus. Everything runs locally — no network at runtime.
+A lightweight native macOS menu bar app for local dictation. By default,
+**hold the 🌐 Globe / Fn key** to record; release it to transcribe in-process
+with [WhisperKit](https://github.com/argmaxinc/WhisperKit) (CoreML on the Apple
+Neural Engine), and the recognized text is pasted straight into whatever text
+field currently has focus. The Whisper model is downloaded at build time and
+bundled into the app, so everything runs on-device with **no network at
+runtime**.
 
 The trigger key and activation style are configurable from the menu bar (see
 [Settings](#settings)).
@@ -13,43 +15,50 @@ The trigger key and activation style are configurable from the menu bar (see
 
 ```
 WhisperType/
-├── CMakeLists.txt                # FetchContent whisper.cpp, model download, signing, bundling
+├── Package.swift                 # SwiftPM manifest (depends on WhisperKit)
 ├── Info.plist                    # LSUIElement (no Dock icon) + microphone usage string
 ├── README.md
 ├── scripts/
+│   ├── build-app.sh              # swift build → fetch + bundle model → assemble + sign WhisperType.app
+│   ├── fetch-model.sh            # downloads the CoreML model + tokenizer for offline bundling
 │   └── create-signing-cert.sh    # creates a stable self-signed code-signing identity
 └── src/
     ├── main.swift                # App entry, MenuBarExtra UI + settings, event routing
     ├── Settings.swift            # UserDefaults-backed trigger key / activation mode
     ├── AudioRecorder.swift       # AVAudioRecorder → 16 kHz / 16-bit / mono WAV
-    ├── WhisperRunner.swift       # Runs bundled CLI via Process, pastes via CGEvent
+    ├── WhisperRunner.swift       # WhisperEngine (WhisperKit) + Paster (CGEvent ⌘V)
     └── HotkeyManager.swift       # Global flagsChanged monitor for the trigger key
 ```
 
 ## Building
 
-Requires CMake ≥ 3.26, Xcode, and the command line tools.
+Requires Xcode (or the Swift toolchain) and macOS 13+.
 
 ```bash
 # (Optional but recommended) create a stable signing identity so the
 # Accessibility permission grant survives rebuilds.
 ./scripts/create-signing-cert.sh
 
-# Configure (fetches whisper.cpp and downloads the ggml-base.en model).
-cmake -G Xcode -B build
-
-# Build a Release bundle.
-cmake --build build --config Release
+# Build and assemble a signed WhisperType.app bundle.
+./scripts/build-app.sh            # release by default; pass "debug" for a debug build
 
 # Launch.
-open build/Release/WhisperType.app
+open build/WhisperType.app
 ```
 
-The first configure step clones whisper.cpp (tag `v1.8.6`) and downloads
-`ggml-base.en.bin` (~142 MB) from Hugging Face into `build/models/`. Both are
-cached, so subsequent configures are fast. The post-build step copies the
-compiled `whisper-cli` (renamed to `whisper-cpp`) and the model into
-`WhisperType.app/Contents/Resources/` and code-signs the bundle.
+The first build resolves and compiles WhisperKit via Swift Package Manager and
+downloads the `base.en` CoreML model + tokenizer (~150 MB, cached in
+`build/model-cache/`). `build-app.sh` then wraps the executable in
+`build/WhisperType.app`, bundles the model into `Contents/Resources/models/`,
+copies in `Info.plist`, and code-signs the bundle. The model load happens at
+launch; the menu bar shows *Loading model…* until it is ready, then *Model
+ready*.
+
+Because the model ships inside the app, there is **no network access at
+runtime**. To build a smaller app that downloads the model on first launch
+instead, set `WHISPERTYPE_BUNDLE_MODEL=0 ./scripts/build-app.sh` — the app then
+fetches the model from Hugging Face the first time it runs and caches it on
+disk.
 
 ### Stable signing (why it matters)
 
@@ -57,7 +66,7 @@ macOS keys the Accessibility (TCC) permission grant on the app's code
 signature. An ad-hoc signature changes hash on every rebuild, so the grant
 would reset and macOS would re-prompt each time. `create-signing-cert.sh`
 creates a self-signed code-signing identity (`WhisperType Self-Signed`) that
-CMake automatically detects and signs with, giving a stable Designated
+`build-app.sh` automatically detects and signs with, giving a stable Designated
 Requirement. If the identity is absent, the build falls back to ad-hoc signing.
 
 ## Required permissions

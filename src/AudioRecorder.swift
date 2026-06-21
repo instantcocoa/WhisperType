@@ -2,8 +2,9 @@
 //  AudioRecorder.swift
 //  WhisperType
 //
-//  Records microphone input to a temporary WAV file in exactly the format
-//  whisper.cpp expects: 16 kHz, 16-bit, mono, little-endian linear PCM.
+//  Records microphone input to a temporary WAV file as 16 kHz, 16-bit, mono,
+//  little-endian linear PCM — Whisper's native input format, which WhisperKit
+//  consumes directly without resampling.
 //
 
 import Foundation

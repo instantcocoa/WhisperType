@@ -24,12 +24,30 @@ final class AppState: ObservableObject {
         case transcribing = "Transcribing…"
     }
 
+    /// Load state of the WhisperKit model (downloaded on demand on first run).
+    enum ModelState {
+        case loading        // downloading and/or loading into memory
+        case ready
+        case failed(String)
+
+        var label: String {
+            switch self {
+            case .loading:          return "Loading model…"
+            case .ready:            return "Model ready"
+            case .failed(let why):  return "Model error: \(why)"
+            }
+        }
+    }
+
     @Published var status: Status = .ready
+    @Published var modelState: ModelState = .loading
 
     /// SF Symbol shown in the menu bar for the current status.
     var symbolName: String {
         switch status {
-        case .ready:        return "mic"
+        case .ready:
+            if case .loading = modelState { return "arrow.down.circle" }
+            return "mic"
         case .recording:    return "mic.fill"
         case .transcribing: return "waveform"
         }
@@ -42,7 +60,7 @@ final class AppState: ObservableObject {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let recorder = AudioRecorder()
-    private let whisper  = WhisperRunner()
+    private let engine   = WhisperEngine()
     private var monitor:  TriggerMonitor?
 
     private var state:    AppState { AppState.shared }
@@ -59,6 +77,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Re-arm the key monitor whenever the trigger key changes.
         settings.onChange = { [weak self] in self?.rearmMonitor() }
         rearmMonitor()
+
+        // Warm up the model in the background so the first dictation is fast.
+        // This is what downloads the weights on first ever launch.
+        prepareModel()
+    }
+
+    /// Kicks off loading (and, on first run, downloading) the Whisper model.
+    private func prepareModel() {
+        state.modelState = .loading
+        Task { [engine] in
+            do {
+                try await engine.prepare()
+                await MainActor.run { AppState.shared.modelState = .ready }
+            } catch {
+                NSLog("WhisperType: failed to load model — \(error.localizedDescription)")
+                await MainActor.run {
+                    AppState.shared.modelState = .failed(error.localizedDescription)
+                }
+            }
+        }
     }
 
     // MARK: Trigger handling
@@ -115,17 +153,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         state.status = .transcribing
 
-        // Run the (blocking) whisper process off the main thread, then hop
-        // back to the main thread to paste and reset state.
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else { return }
-            let text = self.whisper.transcribe(wavURL: wavURL)
-
-            DispatchQueue.main.async {
+        // Transcribe off the main actor (WhisperKit is async); hop back to the
+        // main actor to paste and reset state. The first call may block while
+        // the model finishes downloading/loading.
+        Task { [engine] in
+            let text = try? await engine.transcribe(audioPath: wavURL.path)
+            await MainActor.run {
                 if let text, !text.isEmpty {
-                    self.whisper.paste(text: text)
+                    Paster.paste(text: text)
                 }
-                self.state.status = .ready
+                AppState.shared.status = .ready
             }
         }
     }
@@ -157,6 +194,9 @@ struct WhisperTypeApp: App {
             Divider()
 
             Text("Status: \(state.status.rawValue)")
+            Text(state.modelState.label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Text(settings.hint)
                 .font(.caption)
                 .foregroundStyle(.secondary)

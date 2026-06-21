@@ -15,7 +15,8 @@ The trigger key and activation style are configurable from the menu bar (see
 
 ```
 WhisperType/
-├── Package.swift                 # SwiftPM manifest (depends on WhisperKit)
+├── Package.swift                 # SwiftPM manifest (depends on WhisperKit) — source of truth
+├── CMakeLists.txt                # optional CMake entry point that drives SwiftPM + build-app.sh
 ├── Info.plist                    # LSUIElement (no Dock icon) + microphone usage string
 ├── README.md
 ├── scripts/
@@ -32,7 +33,9 @@ WhisperType/
 
 ## Building
 
-Requires Xcode (or the Swift toolchain) and macOS 13+.
+Requires Xcode (or the Swift toolchain) and macOS 13+. The app is compiled by
+Swift Package Manager (it links WhisperKit in-process); there are two equivalent
+ways to drive the build.
 
 ```bash
 # (Optional but recommended) create a stable signing identity so the
@@ -44,6 +47,20 @@ Requires Xcode (or the Swift toolchain) and macOS 13+.
 
 # Launch.
 open build/WhisperType.app
+```
+
+### Via CMake (optional)
+
+CMake is supported as an orchestrator — it drives SwiftPM (compilation still
+happens in `swift build`) and reuses the same bundling/signing script:
+
+```bash
+cmake -B build-cmake
+cmake --build build-cmake --config Release
+open build-cmake/WhisperType.app
+
+# Skip bundling the model (download on demand at first launch) with:
+cmake -B build-cmake -DWHISPERTYPE_BUNDLE_MODEL=OFF
 ```
 
 The first build resolves and compiles WhisperKit via Swift Package Manager and

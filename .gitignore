@@ -1,7 +1,10 @@
 # Build output
 /build/
 .build/
+/build-cmake/
 DerivedData/
+CMakeCache.txt
+CMakeFiles/
 
 # Swift Package Manager
 .swiftpm/

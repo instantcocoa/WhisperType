@@ -10,7 +10,9 @@
 # model on demand on first run instead (smaller .app, needs network once).
 #
 # Usage:
-#   ./scripts/build-app.sh [debug|release]   # default: release
+#   ./scripts/build-app.sh [debug|release] [output-app-path]
+# Defaults: config=release, output=build/WhisperType.app
+# (The CMake build calls this with its own binary dir as the output path.)
 #
 set -euo pipefail
 
@@ -18,7 +20,7 @@ CONFIG="${1:-release}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="WhisperType"
 BUNDLE_ID="com.whispertype.app"
-APP="$ROOT/build/$APP_NAME.app"
+APP="${2:-$ROOT/build/$APP_NAME.app}"
 MODEL_CACHE="$ROOT/build/model-cache"
 MODEL_VARIANT="openai_whisper-base.en"
 BUNDLE_MODEL="${WHISPERTYPE_BUNDLE_MODEL:-1}"

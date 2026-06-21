@@ -18,8 +18,9 @@ See `README.md` for the user-facing description.
 
 | File | Role |
 |------|------|
-| `Package.swift` | SwiftPM manifest; depends on the `WhisperKit` product from `argmax-oss-swift` |
-| `scripts/build-app.sh` | `swift build` → fetch + bundle model → assemble `build/WhisperType.app` (executable + Info.plist + `Resources/models/` + any SwiftPM resource bundles), detect signing identity, code-sign |
+| `Package.swift` | SwiftPM manifest; depends on the `WhisperKit` product from `argmax-oss-swift`. **Source of truth for compilation/linking.** |
+| `CMakeLists.txt` | Optional CMake entry point. Compiles nothing itself (`LANGUAGES NONE`); a custom target shells out to `scripts/build-app.sh` (which runs `swift build`) and writes the `.app` into CMake's binary dir |
+| `scripts/build-app.sh` | `swift build` → fetch + bundle model → assemble `<out>/WhisperType.app` (executable + Info.plist + `Resources/models/` + any SwiftPM resource bundles), detect signing identity, code-sign. Args: `[debug\|release] [output-app-path]` |
 | `scripts/fetch-model.sh` | Downloads the CoreML model variant (`argmaxinc/whisperkit-coreml`) + matching tokenizer (`openai/whisper-base.en`) into a cache for offline bundling (curl + python3 only) |
 | `Info.plist` | `LSUIElement` (no Dock icon), `NSMicrophoneUsageDescription` |
 | `src/main.swift` | Entry point, `MenuBarExtra` UI + settings pickers, `AppDelegate` event routing, recording lifecycle, model prewarm |
@@ -45,6 +46,16 @@ open build/WhisperType.app
 
 (`./scripts/build-app.sh debug` for a debug build. Plain `swift build` also works
 for a quick compile check; the script just adds bundling + signing.)
+
+CMake is supported as an optional orchestrator (it calls `build-app.sh`, so
+SwiftPM still does the compiling):
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer cmake -B build-cmake
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer cmake --build build-cmake --config Release
+open build-cmake/WhisperType.app
+# -DWHISPERTYPE_BUNDLE_MODEL=OFF to skip bundling (download on demand instead)
+```
 
 **Stop a running instance before rebuilding:** `pkill -f "WhisperType.app/Contents/MacOS/WhisperType"`
 

@@ -11,26 +11,6 @@ runtime**.
 The trigger key and activation style are configurable from the menu bar (see
 [Settings](#settings)).
 
-## Project layout
-
-```
-WhisperType/
-├── Package.swift                 # SwiftPM manifest (depends on WhisperKit) — source of truth
-├── CMakeLists.txt                # optional CMake entry point that drives SwiftPM + build-app.sh
-├── Info.plist                    # LSUIElement (no Dock icon) + microphone usage string
-├── README.md
-├── scripts/
-│   ├── build-app.sh              # swift build → fetch + bundle model → assemble + sign WhisperType.app
-│   ├── fetch-model.sh            # downloads the CoreML model + tokenizer for offline bundling
-│   └── create-signing-cert.sh    # creates a stable self-signed code-signing identity
-└── src/
-    ├── main.swift                # App entry, MenuBarExtra UI + settings, event routing
-    ├── Settings.swift            # UserDefaults-backed trigger key / activation mode
-    ├── AudioRecorder.swift       # AVAudioRecorder → 16 kHz / 16-bit / mono WAV
-    ├── WhisperRunner.swift       # WhisperEngine (WhisperKit) + Paster (CGEvent ⌘V)
-    └── HotkeyManager.swift       # Global flagsChanged monitor for the trigger key
-```
-
 ## Building
 
 Requires Xcode (or the Swift toolchain) and macOS 13+. The app is compiled by

@@ -28,6 +28,9 @@ See `README.md` for the user-facing description.
 | `src/HotkeyManager.swift` | `TriggerMonitor` — mode-agnostic global key watcher (reports down/up) |
 | `src/AudioRecorder.swift` | `AVAudioRecorder` → 16 kHz / 16-bit / mono WAV |
 | `src/WhisperRunner.swift` | `WhisperEngine` actor (WhisperKit load/transcribe, lazy on-demand model) + `Paster` (pasteboard + `CGEvent` ⌘V) |
+| `scripts/make-dmg.sh` | Packages the `.app` into a drag-to-install `.dmg` (hdiutil) |
+| `scripts/make-icon.swift`, `make-icns.sh` | Generate `assets/AppIcon.icns` (CoreGraphics-drawn) |
+| `.github/workflows/release.yml` | CI: builds DMG on PRs; tag `v*` → GitHub Release. Optional Developer ID signing/notarization via secrets |
 | `scripts/create-signing-cert.sh` | Creates the stable self-signed code-signing identity |
 
 **Control flow:** `TriggerMonitor` (flagsChanged observer) → `AppDelegate.handleKeyDown/Up` →

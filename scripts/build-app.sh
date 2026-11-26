@@ -37,6 +37,14 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp "$BIN_DIR/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
 cp "$ROOT/Info.plist"   "$APP/Contents/Info.plist"
+cp "$ROOT/assets/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+
+# Stamp the release version (e.g. from a git tag in CI) into the bundle.
+if [ -n "${WHISPERTYPE_VERSION:-}" ]; then
+    echo "==> Version $WHISPERTYPE_VERSION (build ${WHISPERTYPE_BUILD:-$WHISPERTYPE_VERSION})"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $WHISPERTYPE_VERSION" "$APP/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${WHISPERTYPE_BUILD:-$WHISPERTYPE_VERSION}" "$APP/Contents/Info.plist"
+fi
 
 # Bundle the model + tokenizer so the app works offline from first launch.
 if [ "$BUNDLE_MODEL" != "0" ]; then
@@ -66,8 +74,15 @@ shopt -u nullglob
 #  forces re-approval each time. Use the dedicated self-signed identity if it
 #  exists (see scripts/create-signing-cert.sh); otherwise fall back to ad-hoc.
 # ----------------------------------------------------------------------------
-IDENTITY="WhisperType Self-Signed"
-if ! security find-identity -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
+# SIGN_IDENTITY (e.g. "Developer ID Application: Name (TEAMID)") overrides the
+# self-signed default and enables the hardened runtime + secure timestamp that
+# notarization requires.
+IDENTITY="${SIGN_IDENTITY:-WhisperType Self-Signed}"
+CODESIGN_OPTS=()
+if [ -n "${SIGN_IDENTITY:-}" ]; then
+    CODESIGN_OPTS=(--options runtime --timestamp)
+    echo "==> Signing with '$IDENTITY' (hardened runtime)"
+elif ! security find-identity -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
     echo "==> Stable signing identity not found — using ad-hoc signing."
     echo "    (Accessibility permission will reset on each rebuild; run"
     echo "     ./scripts/create-signing-cert.sh to create a stable identity.)"
@@ -79,10 +94,10 @@ fi
 # Sign nested resource bundles first, then seal the whole app.
 shopt -s nullglob
 for b in "$APP/Contents/Resources"/*.bundle; do
-    codesign --force --sign "$IDENTITY" "$b"
+    codesign --force ${CODESIGN_OPTS[@]+"${CODESIGN_OPTS[@]}"} --sign "$IDENTITY" "$b"
 done
 shopt -u nullglob
-codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
+codesign --force ${CODESIGN_OPTS[@]+"${CODESIGN_OPTS[@]}"} --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
 
 echo "==> Done: $APP"
 echo "    Launch with:  open \"$APP\""

@@ -87,7 +87,7 @@ disk.
 artifact) and, when you push a tag like `v1.2.0`, publishes it as a GitHub
 Release. Optional repo secrets enable Developer ID signing + notarization:
 `MACOS_CERT_P12` (base64 .p12), `MACOS_CERT_PASSWORD`, `SIGN_IDENTITY`,
-`APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`. Without them the release is
+`APP_STORE_CONNECT_KEY` (base64 .p8), `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`. Without them the release is
 ad-hoc signed (users must right-click ▸ Open on first launch and re-grant
 Accessibility after upgrades).
 

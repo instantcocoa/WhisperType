@@ -62,19 +62,22 @@ jobs:
           SIGN_IDENTITY: ${{ steps.cert.outputs.sign == '1' && secrets.SIGN_IDENTITY || '' }}
         run: ./scripts/make-dmg.sh build/WhisperType.app "build/WhisperType-${{ steps.ver.outputs.version }}.dmg"
 
-      # Optional notarization (needs APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD).
+      # Notarization via App Store Connect API key (secrets: APP_STORE_CONNECT_KEY
+      # = base64 .p8, APP_STORE_CONNECT_KEY_ID, APP_STORE_CONNECT_ISSUER_ID).
       - name: Notarize
         if: steps.cert.outputs.sign == '1'
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          ASC_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ASC_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
-          if [ -z "$APPLE_ID" ]; then echo "No notarization secrets — skipping."; exit 0; fi
+          if [ -z "$ASC_KEY" ]; then echo "No notarization secrets — skipping."; exit 0; fi
           DMG="build/WhisperType-${{ steps.ver.outputs.version }}.dmg"
-          xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_APP_PASSWORD" --wait
+          echo "$ASC_KEY" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          xcrun notarytool submit "$DMG" --key "$RUNNER_TEMP/AuthKey.p8" \
+            --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER" --wait --timeout 30m
           xcrun stapler staple "$DMG"
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
 
       - name: Verify bundle
         run: codesign --verify --deep --strict build/WhisperType.app

@@ -15,6 +15,10 @@ your computer**, and it works with no internet connection.
 
 Requires macOS 13 or later. Works on Apple silicon Macs.
 
+**Updates:** WhisperType checks for new versions daily and installs them
+automatically. You can check right away from the menu bar icon ▸ **Check for
+Updates…**, or turn off **Update Automatically** there.
+
 ## First-time setup
 
 macOS will ask for two permissions. Both are required.

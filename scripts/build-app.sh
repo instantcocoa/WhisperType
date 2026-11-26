@@ -57,6 +57,11 @@ else
     echo "==> WHISPERTYPE_BUNDLE_MODEL=0 — model will be downloaded on demand at runtime."
 fi
 
+# Embed Sparkle.framework (auto-update). `-rpath @executable_path/../Frameworks`
+# is baked into the executable by Package.swift.
+mkdir -p "$APP/Contents/Frameworks"
+cp -R "$BIN_DIR/Sparkle.framework" "$APP/Contents/Frameworks/"
+
 # Copy any SwiftPM resource bundles (e.g. WhisperKit / its deps) so Bundle.module
 # resolves at runtime. Harmless if there are none.
 shopt -s nullglob
@@ -90,6 +95,13 @@ elif ! security find-identity -p codesigning 2>/dev/null | grep -q "$IDENTITY"; 
 else
     echo "==> Signing with stable identity '$IDENTITY'"
 fi
+
+# Sign Sparkle's nested helpers inside-out, then the framework itself.
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+for nested in "$SPARKLE/XPCServices/"*.xpc "$SPARKLE/Autoupdate" "$SPARKLE/Updater.app" "$APP/Contents/Frameworks/Sparkle.framework"; do
+    [ -e "$nested" ] || continue
+    codesign --force ${CODESIGN_OPTS[@]+"${CODESIGN_OPTS[@]}"} --sign "$IDENTITY" "$nested"
+done
 
 # Sign nested resource bundles first, then seal the whole app.
 shopt -s nullglob

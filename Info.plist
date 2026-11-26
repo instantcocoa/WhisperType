@@ -31,6 +31,16 @@
     <key>LSUIElement</key>
     <true/>
 
+    <!-- Sparkle auto-update. Appcast is published as a release asset by CI. -->
+    <key>SUFeedURL</key>
+    <string>https://github.com/instantcocoa/WhisperType/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>yWf91BMNBUBzzZHe2sdyWEcTTsm2nTaeQtwSLg3Arx8=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUAutomaticallyUpdate</key>
+    <true/>
+
     <!-- Required so macOS will grant microphone access for recording. -->
     <key>NSMicrophoneUsageDescription</key>
     <string>WhisperType records audio from your microphone so it can transcribe your speech locally and type it for you.</string>

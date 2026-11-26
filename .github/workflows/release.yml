@@ -79,6 +79,16 @@ jobs:
           xcrun stapler staple "$DMG"
           rm -f "$RUNNER_TEMP/AuthKey.p8"
 
+      - name: Build appcast
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          D="$RUNNER_TEMP/sparkle"; mkdir -p "$D"
+          curl -fsSL https://github.com/sparkle-project/Sparkle/releases/download/2.10.1/Sparkle-2.10.1.tar.xz | tar -xJ -C "$D"
+          SPARKLE_BIN="$D/bin" ./scripts/make-appcast.sh "build/WhisperType-${{ steps.ver.outputs.version }}.dmg" \
+            "${{ steps.ver.outputs.version }}" "${{ github.run_number }}" build/appcast.xml
+
       - name: Verify bundle
         run: codesign --verify --deep --strict build/WhisperType.app
 
@@ -92,5 +102,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" build/WhisperType-*.dmg \
+          gh release create "$GITHUB_REF_NAME" build/WhisperType-*.dmg build/appcast.xml \
             --title "WhisperType ${{ steps.ver.outputs.version }}" --generate-notes

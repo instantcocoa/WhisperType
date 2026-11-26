@@ -185,6 +185,7 @@ struct WhisperTypeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @ObservedObject private var state    = AppState.shared
     @ObservedObject private var settings = Settings.shared
+    @StateObject private var updater = Updater()
 
     var body: some Scene {
         MenuBarExtra("WhisperType", systemImage: state.symbolName) {
@@ -214,6 +215,14 @@ struct WhisperTypeApp: App {
                     Text(mode.label).tag(mode)
                 }
             }
+
+            Divider()
+
+            Button("Check for Updates…") {
+                updater.checkForUpdates()
+            }
+            .disabled(!updater.canCheckForUpdates)
+            Toggle("Update Automatically", isOn: $updater.automaticallyUpdates)
 
             Divider()
 

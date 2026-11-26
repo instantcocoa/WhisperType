@@ -97,7 +97,7 @@ for b in "$APP/Contents/Resources"/*.bundle; do
     codesign --force ${CODESIGN_OPTS[@]+"${CODESIGN_OPTS[@]}"} --sign "$IDENTITY" "$b"
 done
 shopt -u nullglob
-codesign --force ${CODESIGN_OPTS[@]+"${CODESIGN_OPTS[@]}"} --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
+codesign --force ${CODESIGN_OPTS[@]+"${CODESIGN_OPTS[@]}"} --entitlements "$ROOT/WhisperType.entitlements" --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
 
 echo "==> Done: $APP"
 echo "    Launch with:  open \"$APP\""

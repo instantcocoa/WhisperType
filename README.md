@@ -1,107 +1,89 @@
 # WhisperType
 
-A lightweight native macOS menu bar app for local dictation. By default,
-**hold the 🌐 Globe / Fn key** to record; release it to transcribe in-process
-with [WhisperKit](https://github.com/argmaxinc/WhisperKit) (CoreML on the Apple
-Neural Engine), and the recognized text is pasted straight into whatever text
-field currently has focus. The Whisper model is downloaded at build time and
-bundled into the app, so everything runs on-device with **no network at
-runtime**.
+Hold a key, talk, let go — your words are typed into whatever app you're using.
 
-The trigger key and activation style are configurable from the menu bar (see
-[Settings](#settings)).
+WhisperType is a small menu bar app for Mac that turns your voice into text,
+anywhere you can type. It runs entirely on your Mac: **your audio never leaves
+your computer**, and it works with no internet connection.
 
-## Building
+## Install
 
-Requires Xcode (or the Swift toolchain) and macOS 13+. The app is compiled by
-Swift Package Manager (it links WhisperKit in-process); there are two equivalent
-ways to drive the build.
+1. Download the latest `WhisperType-<version>.dmg` from the
+   [Releases page](https://github.com/instantcocoa/WhisperType/releases).
+2. Open it and drag **WhisperType** into **Applications**.
+3. Launch WhisperType. A microphone icon appears in your menu bar (there's no Dock icon).
 
-```bash
-# (Optional but recommended) create a stable signing identity so the
-# Accessibility permission grant survives rebuilds.
-./scripts/create-signing-cert.sh
+Requires macOS 13 or later. Works on Apple silicon Macs.
 
-# Build and assemble a signed WhisperType.app bundle.
-./scripts/build-app.sh            # release by default; pass "debug" for a debug build
+## First-time setup
 
-# Launch.
-open build/WhisperType.app
-```
+macOS will ask for two permissions. Both are required.
 
-### Via CMake (optional)
+1. **Microphone** — so WhisperType can hear you. Click *Allow* when prompted.
+2. **Accessibility** — so WhisperType can notice your trigger key and paste the
+   result for you. Open **System Settings ▸ Privacy & Security ▸ Accessibility**,
+   switch WhisperType on, then quit and reopen the app.
 
-CMake is supported as an orchestrator — it drives SwiftPM (compilation still
-happens in `swift build`) and reuses the same bundling/signing script:
+**If you use the 🌐 Globe / Fn key** (the default): set **System Settings ▸
+Keyboard ▸ "Press 🌐 key to" → Do Nothing**. Otherwise macOS will also open the
+emoji picker or start its own dictation while you talk.
 
-```bash
-cmake -B build-cmake
-cmake --build build-cmake --config Release
-open build-cmake/WhisperType.app
+## How to use it
 
-# Skip bundling the model (download on demand at first launch) with:
-cmake -B build-cmake -DWHISPERTYPE_BUNDLE_MODEL=OFF
-```
+1. Click into any text field — a document, a chat, a browser, a terminal.
+2. **Hold** the trigger key (🌐 by default) and speak. The menu bar icon shows
+   *Recording…*.
+3. **Let go.** The icon shows *Transcribing…*, then your text appears at the cursor.
 
-The first build resolves and compiles WhisperKit via Swift Package Manager and
-downloads the `base.en` CoreML model + tokenizer (~150 MB, cached in
-`build/model-cache/`). `build-app.sh` then wraps the executable in
-`build/WhisperType.app`, bundles the model into `Contents/Resources/models/`,
-copies in `Info.plist`, and code-signs the bundle. The model load happens at
-launch; the menu bar shows *Loading model…* until it is ready, then *Model
-ready*.
-
-Because the model ships inside the app, there is **no network access at
-runtime**. To build a smaller app that downloads the model on first launch
-instead, set `WHISPERTYPE_BUNDLE_MODEL=0 ./scripts/build-app.sh` — the app then
-fetches the model from Hugging Face the first time it runs and caches it on
-disk.
-
-## Installing
-
-Download the latest `WhisperType-<version>.dmg` from the
-[Releases page](https://github.com/instantcocoa/WhisperType/releases), open it,
-and drag **WhisperType** to **Applications**. Releases are signed with a
-Developer ID and notarized by Apple, so they open normally — no Gatekeeper
-workarounds needed. (Then grant the [permissions](#required-permissions) below.)
-
-## Required permissions
-
-On first launch macOS will prompt for two permissions — both are mandatory:
-
-1. **Microphone** — to record your speech (prompted automatically).
-2. **Accessibility** — required both to observe the global trigger key and to
-   post the synthetic ⌘V paste keystroke. Grant it in **System Settings ▸
-   Privacy & Security ▸ Accessibility**, then restart the app.
-
-### If you use the 🌐 Globe / Fn key as the trigger
-
-macOS has its own action bound to the Globe key. To stop it from also opening
-the emoji picker or starting Apple's dictation while you dictate, set
-**System Settings ▸ Keyboard ▸ "Press 🌐 key to" → Do Nothing**.
+Prefer not to hold a key? Switch to **Press to toggle** (see below): press once
+to start, press again to stop.
 
 ## Settings
 
-Click the menu bar icon to configure:
+Click the menu bar icon to change:
 
 - **Trigger Key** — 🌐 Globe / Fn, Right Option ⌥, Right Command ⌘,
-  Right Control ⌃, or Right Shift ⇧. (These modifier-style keys never interfere
-  with normal typing.)
+  Right Control ⌃, or Right Shift ⇧. These never get in the way of normal typing.
 - **Activation**
-  - **Hold to talk** — record while the key is held, transcribe on release.
-  - **Press to toggle** — first press starts recording, second press stops and
-    transcribes.
+  - **Hold to talk** — records while the key is held.
+  - **Press to toggle** — first press starts, second press stops.
 
-Choices are saved and applied immediately.
+Changes apply immediately and are remembered.
 
-## Usage
+## Privacy
 
-1. Click into any text field in any application.
-2. **Hold** your trigger key (default 🌐) — the menu bar icon switches to
-   *Recording…*.
-3. Speak, then **release** it — the icon switches to *Transcribing…*.
-4. The transcribed text is pasted at the cursor and the icon returns to *Ready*.
+- Speech is transcribed on your Mac using OpenAI's Whisper model, bundled inside
+  the app.
+- No account, no cloud service, no network access needed.
+- Audio is recorded only while you hold (or have toggled on) the trigger key.
 
-(In *Press to toggle* mode, press once to start and again to stop instead of
-holding.) Click the menu bar icon to see the current status, change settings,
-or quit.
+## Troubleshooting
+
+**Nothing happens when I press the key.**
+Check that WhisperType is enabled under System Settings ▸ Privacy & Security ▸
+Accessibility, then quit and reopen it. After updating the app you may need to
+toggle it off and on again.
+
+**It says "Loading model…" for a while after launch.**
+The speech model loads when the app starts. Wait for *Model ready* in the menu.
+
+**The text didn't appear.**
+Make sure a text field has focus when you release the key. WhisperType pastes
+with ⌘V, so it only works where pasting works.
+
+**Emoji picker or Apple dictation pops up when I use 🌐.**
+Set System Settings ▸ Keyboard ▸ "Press 🌐 key to" → Do Nothing, or choose a
+different trigger key in WhisperType.
+
+**It records silence / returns nothing.**
+Check your input device in System Settings ▸ Sound ▸ Input, and that the
+Microphone permission is granted to WhisperType.
+
+## Building from source
+
+Requires Xcode and macOS 13+.
+
+```bash
+./scripts/build-app.sh      # → build/WhisperType.app (model is downloaded and bundled)
+open build/WhisperType.app
+```
